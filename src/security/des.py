@@ -56,6 +56,7 @@ class DES:
             enc = self._encode_block(block, range(15, -1, -1))
             decrypted_message += enc
         message = int(decrypted_message.to01(), 2).to_bytes((len(decrypted_message) + 7) // 8, byteorder='big')
+        print(message)
         return message.decode('utf-8')
     
     # Encrypt a 64bit block of message
@@ -127,7 +128,7 @@ class DES:
             # print()
             sub_key = permute_bits(C+D, self._PC2_table)
             self.subkeys.append(sub_key)
-            print(f"K{indx}: {' '.join(sub_key.to01()[i:i+6] for i in range(0, len(sub_key), 6))}")
+            # print(f"K{indx}: {' '.join(sub_key.to01()[i:i+6] for i in range(0, len(sub_key), 6))}")
             indx += 1
     
     # Instantiate S-Tables
@@ -202,13 +203,15 @@ class DES:
 def main(message=None):
     # key = b"\x12\x34\x56\x78\x9a\xbc\xde\xf0" # 64 bits
     # key = b"\x12\x34\x56\xbc\xde\xf0\x78\x9a" # 64 bits
-    key = b"\x13\x34\x57\x79\x9B\xBC\xDF\xF1"
+    # key = b"\x63\x34\x57\x79\x9B\xBC\xDF\xF1"
+    key = b"\x72\x73\x74\x76\x77\x4a\x67\x68"
+    print(key.decode('ASCII'))
     
     if message is None:
         # message = "abcdefghijklmnopqrstuv12"
         # message = "aaaaaaaaaaabbbbbbbbbbbbbb"
         # message = "Hello world! How are you?!"
-        message = "aaaaaaaabbbbbbbbccccccccdd"
+        message = "aaaaaaaabbbbbbbb"
     
     configs = {
         'PC1-table': './configs/PC-1.table',
@@ -240,14 +243,14 @@ def main(message=None):
     print(f"Decrypted Message: {len(dec_msg)}", dec_msg, 'x')
     print("------------------")
 
-    print("\n=============")
-    print("Message diff: ", end='')
-    for i in range(len(message)):
-        if message[i] == dec_msg[i]:
-            print(message[i], end='')
-        else:
-            print('-', end='')
-    print("\n-------------")
+    # print("\n=============")
+    # print("Message diff: ", end='')
+    # for i in range(len(message)):
+    #     if message[i] == dec_msg[i]:
+    #         print(message[i], end='')
+    #     else:
+    #         print('-', end='')
+    # print("\n-------------")
     
     b1 = bitarray()
     b1.frombytes(message.encode('utf-8'))
@@ -256,9 +259,9 @@ def main(message=None):
     b101 = b1.to01()
     b201 = b2.to01()
     
-    for i in range(0, len(b201), 64):
-        print(b101[i:i+64])
-        print(b201[i:i+64])
+    # for i in range(0, len(b201), 64):
+    #     print(b101[i:i+64])
+    #     print(b201[i:i+64])
     
     for x in range(64):
         if b101[x] != b201[x]:

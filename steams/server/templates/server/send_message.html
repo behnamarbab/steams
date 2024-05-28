@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Send Message</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <label for="id_content">Message:</label>
+    <textarea id="id_content" name="content"></textarea>
+    <button type="submit">Send</button>
+  </form>
+{% endblock %}

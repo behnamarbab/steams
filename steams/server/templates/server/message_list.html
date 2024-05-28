@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Messages</h2>
+  <ul>
+    {% for msg, decrypted in messages %}
+      <li><strong>{{ msg.sender }}:</strong> {{ decrypted }}</li>
+    {% endfor %}
+  </ul>
+{% endblock %}

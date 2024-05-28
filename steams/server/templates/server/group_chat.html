@@ -1,0 +1,40 @@
+{% extends 'app/base.html' %}
+
+{% block title %}{{ chat.name }}{% endblock %}
+
+{% block content %}
+<h2>{{ chat.name }}</h2>
+<div id="chat-box">
+    {% for message in messages %}
+        <p><strong>{{ message.sender.username }}:</strong> {{ message.content }}</p>
+    {% endfor %}
+</div>
+<textarea id="message-input" rows="4" cols="50"></textarea>
+<button id="send-button">Send</button>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#send-button').click(function() {
+            var message = $('#message-input').val();
+            $.ajax({
+                url: "{% url 'send_message' %}",
+                method: 'POST',
+                data: {
+                    'message': message,
+                    'chat_id': {{ chat.id }},
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(data) {
+                    if (data.success) {
+                        $('#chat-box').append('<p><strong>You:</strong> ' + message + '</p>');
+                        $('#message-input').val('');
+                    } else {
+                        alert('Message sending failed.');
+                    }
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

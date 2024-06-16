@@ -1,16 +1,65 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-</head>
-<body>
-    <h2>Login</h2>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Login</button>
-    </form>
-</body>
-</html>
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}    
+
+{% block content %}
+<script>
+    function generateKeyPair() {
+        const crypt = new JSEncrypt({ default_key_size: 2048 });
+        const publicKey = crypt.getPublicKey();
+        const privateKey = crypt.getPrivateKey();
+
+        // Store the private key securely on the client side (e.g., local storage)
+        localStorage.setItem('privateKey', privateKey);
+
+        // Return the public key to be sent to the server
+        return publicKey;
+    }
+
+    async function handleLogin(event) {
+        event.preventDefault(); // Prevent the form from submitting
+
+        // Check if the private key exists in local storage
+        const privateKey = localStorage.getItem('privateKey');
+        let publicKey = null;
+
+        if (!privateKey) {
+            // Generate key pair if private key does not exist
+            publicKey = generateKeyPair();
+        }
+
+        // Create a FormData object to handle form data
+        const formData = new FormData(document.getElementById('login-form'));
+
+        if (publicKey) {
+            formData.append('public_key', publicKey);
+        }
+
+        // Submit the form data using fetch
+        const response = await fetch(document.getElementById('login-form').action, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            // Handle successful login (e.g., redirect to another page)
+            window.location.href = '/home/';
+        } else {
+            // Handle login error
+            alert('Login failed: ' + result.message);
+        }
+    }
+</script>
+
+<form id="login-form" action="/login/" method="POST" onsubmit="handleLogin(event)">
+    {% csrf_token %}
+    <label for="username">Username:</label>
+    <input type="text" id="username" name="username" required><br>
+    <label for="password">Password:</label>
+    <input type="password" id="password" name="password" required><br>
+    <input type="hidden" name="public_key" id="public_key">
+    <button type="submit">Login</button>
+</form>
+
+{% endblock %}

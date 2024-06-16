@@ -3,6 +3,9 @@ from django.db import models
 
 class CustomUser(AbstractUser):
     # des_key = models.CharField(max_length=32, null=True, blank=True)  # Example field for DES key
+    is_sysadmin = models.BooleanField(default=False)
+    # rsa_private_key = models.TextField(null=True, blank=True)
+    rsa_public_key = models.TextField(null=True, blank=True)
     last_online = models.DateTimeField(auto_now_add=True, null=True)
 
 class Chat(models.Model):
@@ -24,8 +27,11 @@ class ChatUser(models.Model):
 
 class Message(models.Model):
     chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='messages')
-    sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='sent_messages')
-    content = models.TextField()  # Plain text content
+    sender = models.ForeignKey(CustomUser, related_name='sent_messages', on_delete=models.CASCADE)
+    recipient = models.ForeignKey(CustomUser, related_name='received_messages', on_delete=models.CASCADE)
+    encrypted_message = models.BinaryField()
+    encrypted_des_key = models.BinaryField()
+    signature = models.BinaryField()
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:

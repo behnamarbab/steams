@@ -8,16 +8,13 @@ class CustomUserCreationForm(UserCreationForm):
         fields = ('username',)
         
 class UserLoginForm(AuthenticationForm):
+    public_key = forms.CharField(required=False, widget=forms.HiddenInput())
     class Meta:
         fields = ['username', 'password']
 
 class MessageForm(forms.ModelForm):
+    encrypted_content = forms.CharField(widget=forms.HiddenInput())
+
     class Meta:
         model = Message
-        fields = ['content']
-        labels = {
-            'content': 'Message',
-        }
-        widgets = {
-            'content': forms.Textarea(attrs={'rows': 2, 'cols': 50, 'id': 'id_content'}),
-        }
+        fields = ['encrypted_content']

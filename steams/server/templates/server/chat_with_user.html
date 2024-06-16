@@ -9,60 +9,147 @@
         <p><strong>{{ message.sender.username }}:</strong> {{ message.content }}</p>
     {% endfor %}
 </div>
-<form id="message-form">
+<form id="message-form" method="post">
     {% csrf_token %}
-    {{ message_form.as_p }}
+    <textarea id="unencrypted-content" name="unencrypted_content"></textarea>
+    <input type="hidden" id="encrypted-content" name="encrypted_content">
     <button type="submit">Send</button>
 </form>
 
 <script>
+    function generateDesKey() {
+        return CryptoJS.lib.WordArray.random(8).toString(CryptoJS.enc.Hex);
+    }
+
+    function encryptDesKey(desKey, publicKey) {
+        var encrypt = new JSEncrypt();
+        encrypt.setPublicKey(publicKey);
+        return encrypt.encrypt(desKey);
+    }
+
+    function encryptMessage(message, desKey) {
+        var key = CryptoJS.enc.Hex.parse(desKey);
+        var encrypted = CryptoJS.DES.encrypt(message, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
+        return encrypted.toString();
+    }
+
+    function timeConverter(timestamp){
+        var a = new Date(timestamp);
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var year = a.getFullYear();
+        var month = months[a.getMonth()];
+        var date = a.getDate();
+        var hour = "0" + a.getHours();
+        var min = "0" + a.getMinutes();
+        var sec = "0" + a.getSeconds();
+        var time = date + ' ' + month + ' ' + year + ' ' + hour.substr(-2) + ':' + min.substr(-2) + ':' + sec.substr(-2) ;
+        return time;
+    }
+
     function connect() {
         var chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/{{ chat_id }}/'
+            'ws://' + window.location.host + '/ws/chat/{{ chat.id }}/'
         );
- 
+
         chatSocket.onopen = function(e) {
             console.log('WebSocket connection opened');
         };
- 
+
         chatSocket.onmessage = function(e) {
             var data = JSON.parse(e.data);
-            var message = data.message;
+            var encryptedMessage = data.message;
             var sender = data.sender;
- 
-            $('#chat-box').append('<p><strong>' + sender + ':</strong> ' + message + '</p>');
+            var timestamp = timeConverter(data.timestamp);
+
+            var desKey = localStorage.getItem('desKey');
+            if (!desKey) {
+                console.error('DES key not found in local storage');
+                return;
+            }
+
+            var key = CryptoJS.enc.Hex.parse(desKey);
+            var decrypted = CryptoJS.DES.decrypt(encryptedMessage, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
+            var decryptedMessage = decrypted.toString(CryptoJS.enc.Utf8);
+            console.log("Msg=", decryptedMessage, data.message, desKey);
+
+            document.getElementById('chat-box').innerHTML += '<p><strong>' + sender + ':</strong>' + decryptedMessage + ' <em>' + timestamp + '</em></p>';
         };
- 
+
         chatSocket.onclose = function(e) {
             console.error('Chat socket closed unexpectedly');
             setTimeout(function() {
                 connect();
             }, 5000);
         };
- 
+
         chatSocket.onerror = function(e) {
             console.error('WebSocket error:', e);
             chatSocket.close();
         };
- 
-        $(document).ready(function() {
-            $('#message-form').submit(function(e) {
-                e.preventDefault();
-                var message = $('#id_content').val();
-                if (chatSocket.readyState === WebSocket.OPEN) {
-                    chatSocket.send(JSON.stringify({
-                        'message': message,
-                        'sender_id': '{{ request.user.id }}'
-                    }));
-                    $('#id_content').val('');
-                } else {
-                    console.error('WebSocket is not open. Unable to send message.');
-                }
-            });
-        });
+
+        document.getElementById('message-form').onsubmit = function(e) {
+            e.preventDefault();
+            var unencryptedMessage = document.getElementById('unencrypted-content').value;
+            var timestamp = Date.now();
+            var desKey = localStorage.getItem('desKey');
+            if (!desKey) {
+                console.error('DES key not found in local storage');
+                return;
+            }
+
+            console.log("Encrypting message:", unencryptedMessage, "with DES key:", desKey, "Now:", timestamp);
+            var encryptedMessage = encryptMessage(unencryptedMessage, desKey);
+            document.getElementById('encrypted-content').value = encryptedMessage;
+
+            var encryptedDesKey = localStorage.getItem('encryptedDesKey');
+            if (!encryptedDesKey) {
+                console.error('Encrypted DES key not found in local storage');
+                return;
+            }
+
+            if (chatSocket.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({
+                    'message': encryptedMessage,
+                    'encrypted_des_key': encryptedDesKey,
+                    'sender_id': '{{ request.user.id }}',
+                    'recipient': '{{ user_to_chat_with.username }}',
+                    'timestamp': timestamp
+                }));
+                document.getElementById('unencrypted-content').value = '';
+            } else {
+                console.error('WebSocket is not open. Unable to send message.');
+            }
+        };
     }
- 
-    connect();
- </script>
- 
+
+    function setSecretKey() {
+        var desKey = localStorage.getItem('desKey');
+        if (!desKey) {
+            {% comment %} TODO: If server has a backup for the key, that one must be retrieved {% endcomment %}
+            desKey = generateDesKey();
+        }
+        console.log('Generated DES Key:', desKey);
+        {% comment %} TODO: The public key must be updated in case server has updated it's keys {% endcomment %}
+        var publicKey = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4P5df7Z/bGP3MwbCTcln
+Pa3oa68d/WrFtR+R8RIeKvZrOH8i3bKbWeYyQKtXilZT7i3M+AaIHkZdPdDpTAQR
+IerBfXYzqogA8tIxZfTznMeVh34hVE1NpqlB1B1vQbLvddfN6tELG8jNmsF4AZUR
+Ht9us2G7QX6/HGfbYV7x2jXbEDc38GDcO+t+J2UgGXTzzvnfHEcBUsA4Jb9yN1g8
+ghyxF5Fv1j/OZbR12STIqTuKr4YPQlUpRQ3bB14mW8RNEBOO/N4H7gF2i88NaCkU
+IFB1B3DWd7jEj7Z2aJz+6ds8H0z/1LFHyF1/zG2ybkO+bHTl9p1TfOvHE3ZLVXFd
+SwIDAQAB
+-----END PUBLIC KEY-----`;
+        var encryptedDesKey = encryptDesKey(desKey, publicKey);
+        console.log('Encrypted DES Key:', encryptedDesKey);
+
+        localStorage.setItem('desKey', desKey);
+        localStorage.setItem('encryptedDesKey', encryptedDesKey);
+    }
+
+    window.onload = function() {
+        setSecretKey();
+        connect();
+    }
+</script>
+
 {% endblock %}

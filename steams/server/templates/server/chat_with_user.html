@@ -3,10 +3,9 @@
 {% block title %}Chat with {{ user_to_chat_with.username }}{% endblock %}
 
 {% block content %}
-<h2>Chat with {{ user_to_chat_with.username }}</h2>
 <div id="chat-box">
     {% for message in messages %}
-        <p><strong>{{ message.sender.username }}:</strong> {{ message.content }}</p>
+        <p><strong>{{ message.sender.username }}:</strong> <span class="encrypted-message" data-encrypted="{{ message.encrypted_message }}"></span></p>
     {% endfor %}
 </div>
 <form id="message-form" method="post">
@@ -33,17 +32,67 @@
         return encrypted.toString();
     }
 
-    function timeConverter(timestamp){
+    function xorHash(message) {
+        const blockSize = 48 / 8; // 48 bits = 6 bytes
+        let high = 0; // higher 24 bits
+        let low = 0;  // lower 24 bits
+    
+        for (let i = 0; i < message.length; i++) {
+            const charCode = message.charCodeAt(i);
+            const shiftAmount = (i % blockSize) * 8;
+    
+            if (shiftAmount < 24) {
+                low ^= charCode << shiftAmount;
+            } else {
+                high ^= charCode << (shiftAmount - 24);
+            }
+        }
+        console.log(high.toString(2), low.toString(2))
+        // Combine high and low parts to form a 48-bit hash
+        return { high: high & 0xFFFFFF, low: low & 0xFFFFFF };
+    }
+    
+    function signHash(hash, privateKey) {
+        const crypt = new JSEncrypt();
+        crypt.setPrivateKey(privateKey);
+    
+        // Combine high and low parts into a single string
+        const hashStr = hash.high.toString(16).padStart(6, '0') + hash.low.toString(16).padStart(6, '0');
+        const signedHash = crypt.encrypt(hashStr);
+        return signedHash;
+    }
+
+    function timeConverter(timestamp) {
         var a = new Date(timestamp);
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         var year = a.getFullYear();
         var month = months[a.getMonth()];
         var date = a.getDate();
         var hour = "0" + a.getHours();
         var min = "0" + a.getMinutes();
         var sec = "0" + a.getSeconds();
-        var time = date + ' ' + month + ' ' + year + ' ' + hour.substr(-2) + ':' + min.substr(-2) + ':' + sec.substr(-2) ;
+        var time = date + ' ' + month + ' ' + year + ' ' + hour.substr(-2) + ':' + min.substr(-2) + ':' + sec.substr(-2);
         return time;
+    }
+
+    function decryptMessage(encryptedMessage, desKey) {
+        var key = CryptoJS.enc.Hex.parse(desKey);
+        var decrypted = CryptoJS.DES.decrypt(encryptedMessage, key, { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
+        return decrypted.toString(CryptoJS.enc.Utf8);
+    }
+
+    function decryptAllMessages() {
+        var desKey = localStorage.getItem('desKey-{{ chat.id }}');
+        if (!desKey) {
+            console.error('DES key not found in local storage');
+            return;
+        }
+
+        document.querySelectorAll('.encrypted-message').forEach(function(element) {
+            var encryptedMessage = element.getAttribute('data-encrypted');
+            var decryptedMessage = decryptMessage(encryptedMessage, desKey);
+            element.textContent = decryptedMessage;
+        });
     }
 
     function connect() {
@@ -61,7 +110,7 @@
             var sender = data.sender;
             var timestamp = timeConverter(data.timestamp);
 
-            var desKey = localStorage.getItem('desKey');
+            var desKey = localStorage.getItem('desKey-{{ chat.id }}');
             if (!desKey) {
                 console.error('DES key not found in local storage');
                 return;
@@ -72,7 +121,7 @@
             var decryptedMessage = decrypted.toString(CryptoJS.enc.Utf8);
             console.log("Msg=", decryptedMessage, data.message, desKey);
 
-            document.getElementById('chat-box').innerHTML += '<p><strong>' + sender + ':</strong>' + decryptedMessage + ' <em>' + timestamp + '</em></p>';
+            document.getElementById('chat-box').innerHTML += '<p><strong>' + sender + ': </strong>' + decryptedMessage + '</p>';
         };
 
         chatSocket.onclose = function(e) {
@@ -91,29 +140,47 @@
             e.preventDefault();
             var unencryptedMessage = document.getElementById('unencrypted-content').value;
             var timestamp = Date.now();
-            var desKey = localStorage.getItem('desKey');
+            var desKey = localStorage.getItem('desKey-{{ chat.id }}');
             if (!desKey) {
                 console.error('DES key not found in local storage');
                 return;
             }
-
+        
             console.log("Encrypting message:", unencryptedMessage, "with DES key:", desKey, "Now:", timestamp);
             var encryptedMessage = encryptMessage(unencryptedMessage, desKey);
             document.getElementById('encrypted-content').value = encryptedMessage;
-
-            var encryptedDesKey = localStorage.getItem('encryptedDesKey');
+        
+            var encryptedDesKey = localStorage.getItem('encryptedDesKey-{{ chat.id }}');
             if (!encryptedDesKey) {
                 console.error('Encrypted DES key not found in local storage');
                 return;
             }
-
+        
+            // Retrieve the private key from local storage
+            var privateKey = localStorage.getItem('privateKey');
+            if (!privateKey) {
+                console.error('Private key not found in local storage');
+                return;
+            }
+        
+            // Generate the 48-bit hash
+            var hash = xorHash(encryptedMessage);
+            console.log("Hash:", hash);
+            console.log("EncMsg:", encryptedMessage)
+        
+            // Sign the hash
+            var signature = signHash(hash, privateKey);
+            console.log("Signature:", signature);
+        
             if (chatSocket.readyState === WebSocket.OPEN) {
                 chatSocket.send(JSON.stringify({
                     'message': encryptedMessage,
                     'encrypted_des_key': encryptedDesKey,
                     'sender_id': '{{ request.user.id }}',
-                    'recipient': '{{ user_to_chat_with.username }}',
-                    'timestamp': timestamp
+                    'recipient': '{{ user_to_chat_with.id }}',
+                    'timestamp': timestamp,
+                    'signature': signature,
+                    'chat_id': {{ chat.id }}
                 }));
                 document.getElementById('unencrypted-content').value = '';
             } else {
@@ -123,13 +190,13 @@
     }
 
     function setSecretKey() {
-        var desKey = localStorage.getItem('desKey');
+        var desKey = localStorage.getItem('desKey-{{ chat.id }}');
         if (!desKey) {
             {% comment %} TODO: If server has a backup for the key, that one must be retrieved {% endcomment %}
             desKey = generateDesKey();
         }
         console.log('Generated DES Key:', desKey);
-        {% comment %} TODO: The public key must be updated in case server has updated it's keys {% endcomment %}
+        {% comment %} TODO: The public key must be updated in case server has updated its keys {% endcomment %}
         var publicKey = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4P5df7Z/bGP3MwbCTcln
 Pa3oa68d/WrFtR+R8RIeKvZrOH8i3bKbWeYyQKtXilZT7i3M+AaIHkZdPdDpTAQR
@@ -142,12 +209,13 @@ SwIDAQAB
         var encryptedDesKey = encryptDesKey(desKey, publicKey);
         console.log('Encrypted DES Key:', encryptedDesKey);
 
-        localStorage.setItem('desKey', desKey);
-        localStorage.setItem('encryptedDesKey', encryptedDesKey);
+        localStorage.setItem('desKey-{{ chat.id }}', desKey);
+        localStorage.setItem('encryptedDesKey-{{ chat.id }}', encryptedDesKey);
     }
 
-    window.onload = function() {
+    window.onload = function () {
         setSecretKey();
+        decryptAllMessages();
         connect();
     }
 </script>

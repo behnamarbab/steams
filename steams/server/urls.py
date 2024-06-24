@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import register_user, send_message, message_list, CustomLoginView, home, chat_with_user
+from .views import register_user, send_message, message_list, CustomLoginView, home, chat_with_user, logout_view
 
 urlpatterns = [
     path('home/', home, name='home'),
@@ -24,5 +24,6 @@ urlpatterns = [
     path('send/', send_message, name='send_message'),
     path('messages/', message_list, name='message_list'),
     path('login/', CustomLoginView.as_view(), name='login'),
+    path('logout/', logout_view, name='logout'),
     path('chatting/<int:user_id>/', chat_with_user, name='chat_with_user'),
 ]

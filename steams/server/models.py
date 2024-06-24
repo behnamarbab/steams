@@ -29,9 +29,9 @@ class Message(models.Model):
     chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(CustomUser, related_name='sent_messages', on_delete=models.CASCADE)
     recipient = models.ForeignKey(CustomUser, related_name='received_messages', on_delete=models.CASCADE)
-    encrypted_message = models.BinaryField()
-    encrypted_des_key = models.BinaryField()
-    signature = models.BinaryField()
+    encrypted_message = models.CharField(max_length=256)
+    encrypted_des_key = models.CharField(max_length=1024)
+    # signature = models.BinaryField()
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:

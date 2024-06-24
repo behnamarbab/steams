@@ -11,6 +11,7 @@
 
         // Store the private key securely on the client side (e.g., local storage)
         localStorage.setItem('privateKey', privateKey);
+        localStorage.setItem('publicKey', publicKey)
 
         // Return the public key to be sent to the server
         return publicKey;
@@ -21,9 +22,9 @@
 
         // Check if the private key exists in local storage
         const privateKey = localStorage.getItem('privateKey');
-        let publicKey = null;
+        let publicKey = localStorage.getItem('publicKey');
 
-        if (!privateKey) {
+        if (!privateKey || !publicKey) {
             // Generate key pair if private key does not exist
             publicKey = generateKeyPair();
         }

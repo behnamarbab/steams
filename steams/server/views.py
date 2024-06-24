@@ -6,7 +6,7 @@ import logging
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import user_passes_test, login_required
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.views import LoginView
 from asgiref.sync import sync_to_async, async_to_sync
 from .forms import CustomUserCreationForm, UserLoginForm, MessageForm
@@ -133,8 +133,11 @@ class CustomLoginView(LoginView):
         public_key = form.cleaned_data.get('public_key')
 
         if public_key:
+            logger.info("----- Setting public key")
             user.rsa_public_key = public_key
             user.save()
+        else:
+            logger.info("---------- Could not set the public key")
 
         # Log in the user
         login(self.request, user)
@@ -144,3 +147,7 @@ class CustomLoginView(LoginView):
     
     def form_invalid(self, form):
         return JsonResponse({'status': 'error', 'message': 'Invalid credentials'}, status=400)
+
+def logout_view(request):
+    logout(request)
+    return redirect('login')
